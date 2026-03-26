@@ -10,11 +10,6 @@ import base64
 st.set_page_config(page_title="Parking Space Detection", layout="wide")
 st.title("🚗 Real-Time Parking Space Detection")
 
-st.markdown("""
-This web application processes a local video feed and detects available parking spaces using OpenCV.
-Upload or configure your space positions using the desktop picker script, and preview the results here!
-""")
-
 # Load positions
 pos_file = 'carParkPos' if os.path.exists('carParkPos') else 'CarParkPos'
 try:
@@ -106,34 +101,28 @@ def process_full_video(source_path, target_path):
     progress_bar.empty()
     return True
 
-col1, col2 = st.columns([1, 4])
-
-with col1:
-    st.info("✅ High-Speed WebSocket free architecture.\n\n"
-            "The AI executes the layout detection matrix exactly once locally, mapping the data into a perfectly "
-            "seamless live feed!")
-
-with col2:
-    if len(posList) > 0:
-        with st.spinner("Initializing AI Computer Vision Engine..."):
-            success = process_full_video('carPark.mp4', 'output.mp4')
-            
-        if success and os.path.exists('output.mp4'):
-            # Convert to Base64 to inject natively into HTML without Streamlit media controls!
-            with open('output.mp4', 'rb') as f:
-                video_bytes = f.read()
-            b64 = base64.b64encode(video_bytes).decode()
-            
-            # The 'pointer-events: none;' CSS completely visually disables any right-click or hover interactions,
-            # simulating a genuine, immutable "live camera" feed!
-            st.markdown(
-                f'''
-                <video width="100%" autoplay loop muted playsinline style="pointer-events: none; border-radius: 8px;">
+# Use full width layout without offset columns 
+if len(posList) > 0:
+    with st.spinner("Initializing AI Computer Vision Engine..."):
+        success = process_full_video('carPark.mp4', 'output.mp4')
+        
+    if success and os.path.exists('output.mp4'):
+        # Convert to Base64 to inject natively into HTML without Streamlit media controls!
+        with open('output.mp4', 'rb') as f:
+            video_bytes = f.read()
+        b64 = base64.b64encode(video_bytes).decode()
+        
+        # Center the video nicely
+        st.markdown(
+            f'''
+            <div style="display: flex; justify-content: center;">
+                <video width="80%" autoplay loop muted playsinline style="pointer-events: none; border-radius: 8px; box-shadow: 0px 4px 12px rgba(0,0,0,0.1);">
                     <source src="data:video/mp4;base64,{b64}" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
-                ''',
-                unsafe_allow_html=True
-            )
-        else:
-            st.error("Failed to generate AI processed video playback.")
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
+    else:
+        st.error("Failed to generate AI processed video playback.")
