@@ -4,7 +4,6 @@ import pickle
 import cvzone
 import numpy as np
 import os
-import time
 
 st.set_page_config(page_title="Parking Space Detection", layout="wide")
 st.title("🚗 Real-Time Parking Space Detection")
@@ -53,15 +52,17 @@ with col1:
     run_video = st.checkbox("🟢 Run Video Stream", value=False)
     st.info("Check the box to start processing the video. Uncheck it to stop.")
 
-with col2:
-    frame_placeholder = st.empty()
+if run_video and 'cap' not in st.session_state:
+    st.session_state.cap = cv2.VideoCapture('carPark.mp4')
+elif not run_video and 'cap' in st.session_state:
+    st.session_state.cap.release()
+    del st.session_state.cap
 
-if run_video:
-    cap = cv2.VideoCapture('carPark.mp4')
-    if not cap.isOpened():
-        st.error("Error opening video file `carPark.mp4` - Please ensure the file exists and ffmpeg is installed.")
-    else:
-        while run_video:
+@st.fragment(run_every=0.1)
+def show_video():
+    if run_video and 'cap' in st.session_state:
+        cap = st.session_state.cap
+        if cap.isOpened():
             if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 
@@ -79,12 +80,12 @@ if run_video:
                 # Convert to JPG bytes to prevent Streamlit MediaFileStorage caching errors
                 ret, buffer = cv2.imencode('.jpg', img)
                 if ret:
-                    frame_placeholder.image(buffer.tobytes(), use_column_width=True)
-                    
-                # Strict sleep to prevent WebSocket spam
-                time.sleep(0.08)
+                    st.image(buffer.tobytes(), use_column_width=True)
             else:
                 st.warning("Video stream ended or failed to read.")
-                break
-        
-        cap.release()
+
+with col2:
+    if run_video:
+        show_video()
+    else:
+        st.info("Video feed is currently stopped.")
