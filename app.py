@@ -49,19 +49,20 @@ def checkParkingSpace(imgPro, img):
 col1, col2 = st.columns([1, 4])
 
 with col1:
-    run_video = st.checkbox("🟢 Run Video Stream", value=False)
+    # Changed default to True so it immediately starts for visitors
+    run_video = st.checkbox("🟢 Run Video Stream", value=True)
     st.info("Check the box to start processing the video. Uncheck it to stop.")
 
-if run_video and 'cap' not in st.session_state:
-    st.session_state.cap = cv2.VideoCapture('carPark.mp4')
-elif not run_video and 'cap' in st.session_state:
-    st.session_state.cap.release()
-    del st.session_state.cap
+# ONLY way to persist Unserializable C++ objects (like cv2.VideoCapture) across Cloud session states safely!
+@st.cache_resource
+def get_cap():
+    return cv2.VideoCapture('carPark.mp4')
+
+cap = get_cap()
 
 @st.fragment(run_every=0.1)
 def show_video():
-    if run_video and 'cap' in st.session_state:
-        cap = st.session_state.cap
+    if run_video:
         if cap.isOpened():
             if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -83,6 +84,8 @@ def show_video():
                     st.image(buffer.tobytes(), use_column_width=True)
             else:
                 st.warning("Video stream ended or failed to read.")
+        else:
+            st.error("Error: Could not process carPark.mp4. Ensure file exists and codecs are available.")
 
 with col2:
     if run_video:
