@@ -49,10 +49,6 @@ def checkParkingSpace(imgPro, img):
 
 col1, col2 = st.columns([1, 4])
 
-with col1:
-    run_video = st.checkbox("🟢 Run Video Stream", value=True)
-    st.info("Check the box to start processing the video. Uncheck it to stop.")
-
 # Cache the video locally on Streamlit server memory so it isn't deleted on rerun
 @st.cache_resource
 def get_cap():
@@ -60,42 +56,53 @@ def get_cap():
 
 cap = get_cap()
 
+with col1:
+    if 'run_video' not in st.session_state:
+        st.session_state.run_video = False
+        
+    if st.button("🟢 Start Video Stream") and not st.session_state.run_video:
+        st.session_state.run_video = True
+        st.rerun()
+    if st.button("🔴 Stop Video Stream") and st.session_state.run_video:
+        st.session_state.run_video = False
+        st.rerun()
+
 with col2:
     frame_placeholder = st.empty()
     
-    if run_video:
+    if st.session_state.run_video:
         if not cap.isOpened():
             st.error("Error: Could not process carPark.mp4. Ensure file exists and codecs are available.")
+            st.session_state.run_video = False
         else:
-            # Revert to a while-loop but use an empty placeholder to update DOM in-place seamlessly without flashing
-            while run_video:
-                if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    
-                success, img = cap.read()
-                if success:
-                    imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    imgBlur = cv2.GaussianBlur(imgGray, (3, 3), 1)
-                    imgThreshold = cv2.adaptiveThreshold(imgBlur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 16)
-                    imgMedian = cv2.medianBlur(imgThreshold, 5)
-                    kernel = np.ones((3, 3), np.uint8)
-                    imgDilate = cv2.dilate(imgMedian, kernel, iterations=1)
+            if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                
+            success, img = cap.read()
+            if success:
+                imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                imgBlur = cv2.GaussianBlur(imgGray, (3, 3), 1)
+                imgThreshold = cv2.adaptiveThreshold(imgBlur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 16)
+                imgMedian = cv2.medianBlur(imgThreshold, 5)
+                kernel = np.ones((3, 3), np.uint8)
+                imgDilate = cv2.dilate(imgMedian, kernel, iterations=1)
 
-                    checkParkingSpace(imgDilate, img)
-                    
-                    # Resize the frame down to fit Streamlit websocket payloads without crashing
-                    imgDisplay = cv2.resize(img, (800, 450))
-                    
-                    # Convert to JPG bytes with 60% quality compression!
-                    ret, buffer = cv2.imencode('.jpg', imgDisplay, [cv2.IMWRITE_JPEG_QUALITY, 60])
-                    if ret:
-                        # Updates the tag silently, preventing Streamlit clearing UI and flashing black
-                        frame_placeholder.image(buffer.tobytes(), use_column_width=True)
-                        
-                    # Target 12 FPS to fit perfectly under WebSocket traffic limits
-                    time.sleep(0.08)
-                else:
-                    st.warning("Video stream ended or failed to read.")
-                    break
+                checkParkingSpace(imgDilate, img)
+                
+                # Resize and compress payload
+                imgDisplay = cv2.resize(img, (800, 450))
+                ret, buffer = cv2.imencode('.jpg', imgDisplay, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                if ret:
+                    frame_placeholder.image(buffer.tobytes(), use_column_width=True)
+                
+                # Sleep to strictly enforce FPS and prevent WebSocket timeouts
+                time.sleep(0.08)
+                
+                # Crucial feature: explicitly end execution loop and tell Streamlit to flush to DOM!
+                # This entirely bypasses the FastRerun batch-blocking issue that breaks `while` loops.
+                st.rerun()
+            else:
+                st.warning("Video stream ended or failed to read.")
+                st.session_state.run_video = False
     else:
         st.info("Video feed is currently stopped.")
