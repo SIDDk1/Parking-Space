@@ -47,35 +47,39 @@ def checkParkingSpace(imgPro, img):
     cvzone.putTextRect(img, f'Free: {spaceCounter}/{len(posList)}', (100, 50), scale=3,
                            thickness=5, offset=20, colorR=(0, 200, 0))
 
+# Initialize Session State
+if 'run_video' not in st.session_state:
+    st.session_state.run_video = False
+
 col1, col2 = st.columns([1, 4])
 with col1:
-    run_video = st.button("Start Video Feed")
-    stop_video = st.button("Stop Video Feed")
-    st.info("The video feed uses a loop. Click 'Stop Video Feed' or refresh the page to stop.")
+    if st.button("Start Video Feed"):
+        st.session_state.run_video = True
+        st.rerun()
+    if st.button("Stop Video Feed"):
+        st.session_state.run_video = False
+        if 'cap' in st.session_state:
+            st.session_state.cap.release()
+            del st.session_state.cap
+        st.rerun()
+    st.info("The video feed uses Streamlit's native rerun loop.")
 
 with col2:
     frame_placeholder = st.empty()
 
-if run_video:
-    cap = cv2.VideoCapture('carPark.mp4')
-    if not cap.isOpened():
-        st.error("Error opening video file `carPark.mp4`")
-    else:
-        while True:
-            # Check if stop button pressed internally? No, Streamlit buttons rerun the script.
-            # But the while loop will block until stopped. 
-            # In Streamlit, a long running loop blocks the session. A quick way to stop it natively is to use session state or just tell users to refresh.
-            if stop_video:
-                break
+# Streaming Loop using st.rerun
+if st.session_state.run_video:
+    if 'cap' not in st.session_state:
+        st.session_state.cap = cv2.VideoCapture('carPark.mp4')
+        
+    cap = st.session_state.cap
+    
+    if cap.isOpened():
+        if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             
-            if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            
-            success, img = cap.read()
-            if not success:
-                st.warning("Video stream ended or failed to read.")
-                break
-                
+        success, img = cap.read()
+        if success:
             imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             imgBlur = cv2.GaussianBlur(imgGray, (3, 3), 1)
             imgThreshold = cv2.adaptiveThreshold(imgBlur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 16)
@@ -85,11 +89,22 @@ if run_video:
 
             checkParkingSpace(imgDilate, img)
             
-            # Convert BGR to RGB for Streamlit image rendering
             # Encode the image to JPEG bytes to prevent Streamlit MediaFileStorage caching errors
             ret, buffer = cv2.imencode('.jpg', img)
             if ret:
                 frame_placeholder.image(buffer.tobytes(), use_column_width=True)
-            
-            # Sleep to prevent overwhelming the Streamlit Cloud websocket (10 FPS max)
+                
+            # Manage frame pacing
             time.sleep(0.1)
+            
+            # Rerun script seamlessly for the next frame
+            st.rerun()
+        else:
+            st.warning("Video stream ended or failed to read.")
+            st.session_state.run_video = False
+            cap.release()
+            del st.session_state.cap
+            st.rerun()
+    else:
+        st.error("Error opening video file `carPark.mp4`")
+        st.session_state.run_video = False
