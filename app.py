@@ -89,5 +89,5 @@ if run_video:
             imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             frame_placeholder.image(imgRGB, channels="RGB", use_container_width=True)
             
-            # Sleep briefly to not overwhelm the server CPU
-            time.sleep(0.01)
+            # Sleep to prevent overwhelming the Streamlit Cloud websocket (20 FPS max)
+            time.sleep(0.05)
