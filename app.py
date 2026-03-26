@@ -5,6 +5,7 @@ import cvzone
 import numpy as np
 import os
 import subprocess
+import base64
 
 st.set_page_config(page_title="Parking Space Detection", layout="wide")
 st.title("🚗 Real-Time Parking Space Detection")
@@ -59,8 +60,8 @@ def process_full_video(source_path, target_path):
         
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = int(cap.get(cv2.CAP_PROP_FPS))
-    width_vid = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height_vid = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    width_vid = 800
+    height_vid = 450
     
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     temp_path = "temp_out.mp4"
@@ -83,7 +84,9 @@ def process_full_video(source_path, target_path):
 
         checkParkingSpace(imgDilate, img)
         
-        out.write(img)
+        # Resize aggressively to save memory and Base64 size
+        imgDisplay = cv2.resize(img, (width_vid, height_vid))
+        out.write(imgDisplay)
         frame_count += 1
         
         # Throttled progress update to keep UI fast
@@ -95,8 +98,8 @@ def process_full_video(source_path, target_path):
     
     progress_bar.progress(1.0, text="Encoding optimized playback video for the Web (H.264)...")
     
-    # Convert OpenCV raw mp4 to HTML5 compatible H.264 mp4 via ffmpeg
-    subprocess.run(['ffmpeg', '-y', '-i', temp_path, '-vcodec', 'libx264', '-f', 'mp4', target_path])
+    # Compress significantly with crf 28 so the Base64 HTML string isn't huge
+    subprocess.run(['ffmpeg', '-y', '-i', temp_path, '-vcodec', 'libx264', '-crf', '28', '-preset', 'fast', '-f', 'mp4', target_path])
     os.remove(temp_path)
     
     # Clear the progress bar when perfectly complete
@@ -107,8 +110,8 @@ col1, col2 = st.columns([1, 4])
 
 with col1:
     st.info("✅ High-Speed WebSocket free architecture.\n\n"
-            "The AI executes the layout detection matrix exactly once locally, converting it into a perfectly "
-            "compressed H.264 stream for native zero-lag browser playback!")
+            "The AI executes the layout detection matrix exactly once locally, mapping the data into a perfectly "
+            "seamless live feed!")
 
 with col2:
     if len(posList) > 0:
@@ -116,7 +119,21 @@ with col2:
             success = process_full_video('carPark.mp4', 'output.mp4')
             
         if success and os.path.exists('output.mp4'):
-            # The holy grail of video streaming in Streamlit: the native HTML5 player
-            st.video('output.mp4', loop=True, autoplay=True, muted=True)
+            # Convert to Base64 to inject natively into HTML without Streamlit media controls!
+            with open('output.mp4', 'rb') as f:
+                video_bytes = f.read()
+            b64 = base64.b64encode(video_bytes).decode()
+            
+            # The 'pointer-events: none;' CSS completely visually disables any right-click or hover interactions,
+            # simulating a genuine, immutable "live camera" feed!
+            st.markdown(
+                f'''
+                <video width="100%" autoplay loop muted playsinline style="pointer-events: none; border-radius: 8px;">
+                    <source src="data:video/mp4;base64,{b64}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                ''',
+                unsafe_allow_html=True
+            )
         else:
             st.error("Failed to generate AI processed video playback.")
