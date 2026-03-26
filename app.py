@@ -60,7 +60,7 @@ def get_cap():
 
 cap = get_cap()
 
-@st.fragment(run_every=0.1)
+@st.fragment(run_every=0.33)
 def show_video():
     if run_video:
         if cap.isOpened():
@@ -78,8 +78,11 @@ def show_video():
 
                 checkParkingSpace(imgDilate, img)
                 
-                # Convert to JPG bytes to prevent Streamlit MediaFileStorage caching errors
-                ret, buffer = cv2.imencode('.jpg', img)
+                # Resize the frame strictly for display to save WebSocket bandwidth on Streamlit Cloud
+                imgDisplay = cv2.resize(img, (800, 450))
+                
+                # Convert to JPG bytes with low quality to prevent Streamlit WebSocket crashes/freezes
+                ret, buffer = cv2.imencode('.jpg', imgDisplay, [cv2.IMWRITE_JPEG_QUALITY, 60])
                 if ret:
                     st.image(buffer.tobytes(), use_column_width=True)
             else:
