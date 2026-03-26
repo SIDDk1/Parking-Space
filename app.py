@@ -86,8 +86,10 @@ if run_video:
             checkParkingSpace(imgDilate, img)
             
             # Convert BGR to RGB for Streamlit image rendering
-            imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            frame_placeholder.image(imgRGB, channels="RGB", use_container_width=True)
+            # Encode the image to JPEG bytes to prevent Streamlit MediaFileStorage caching errors
+            ret, buffer = cv2.imencode('.jpg', img)
+            if ret:
+                frame_placeholder.image(buffer.tobytes(), use_column_width=True)
             
-            # Sleep to prevent overwhelming the Streamlit Cloud websocket (20 FPS max)
-            time.sleep(0.05)
+            # Sleep to prevent overwhelming the Streamlit Cloud websocket (10 FPS max)
+            time.sleep(0.1)
